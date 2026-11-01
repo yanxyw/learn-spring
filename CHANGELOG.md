@@ -32,7 +32,10 @@ Changes:
 - `BeanFactory` is now an interface with only `getBean`, and `DefaultListableBeanFactory` implements it. Callers depend
   only on `getBean`, so the implementation can grow (parent classes, `ApplicationContext`) without affecting them.
 - `getBean` calls `createBean`, which instantiates the class via reflection (`getDeclaredConstructor().newInstance()`).
-  Exceptions from the reflection are wrapped in an unchecked `BeansException`.
+  Exceptions from the reflection are wrapped in an unchecked `BeansException`, so callers of `getBean` are not forced
+  to catch them. As
+  [Spring's `BeansException` javadoc](https://github.com/spring-projects/spring-framework/blob/6.0.x/spring-beans/src/main/java/org/springframework/beans/BeansException.java#L26-L27)
+  puts it: "Beans exceptions are usually fatal; there is no reason for them to be checked."
 
 Differences from real Spring:
 
@@ -71,3 +74,29 @@ Differences from real Spring:
   singletons inside a lock (`DefaultSingletonBeanRegistry.getSingleton(beanName, ObjectFactory)`).
 - Every bean here is a singleton. Spring also supports `@Scope("prototype")`, which skips the cache and creates a new
   object on every `getBean`.
+
+### Step 4 - Extract AbstractBeanFactory
+
+Why:
+
+- After step 3, `getBean` follows a fixed flow: check the cache, find the definition, create the bean, cache it. None of
+  these steps depend on how bean definitions are stored, so the flow can be written once in a parent class.
+
+Changes:
+
+- New abstract class `AbstractBeanFactory` implements `getBean` and owns the singleton cache (`singletonObjects`,
+  `getSingleton`, `addSingleton`).
+- It leaves two steps to subclasses as abstract methods: `getBeanDefinition` (where definitions come from) and
+  `createBean` (how a bean is built). `DefaultListableBeanFactory` extends it and implements both, using its definition
+  map and reflection.
+- This follows the [template method pattern](https://www.baeldung.com/java-template-method-pattern): `getBean` is the
+  template method that fixes the order of the steps. The parent decides *when* things happen; the subclass decides
+  *how*.
+
+Differences from real Spring:
+
+- `createBean` is implemented in `AbstractAutowireCapableBeanFactory`, a class between `AbstractBeanFactory` and
+  `DefaultListableBeanFactory`. It will be added in later steps.
+- Aside from `getBean(name)` implemented in `AbstractBeanFactory`, Spring also has a by-type `getBean(Class)`
+  implemented in `DefaultListableBeanFactory`. Definitions are stored by name, so finding a bean by type means checking
+  every definition, which only a factory that can list all its definitions can do.
