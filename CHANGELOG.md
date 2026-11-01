@@ -46,3 +46,28 @@ Differences from real Spring:
 Next step:
 
 - Every `getBean` call still creates a new instance. Step 3 will add a singleton cache to avoid that.
+
+### Step 3 - Singleton cache
+
+Changes:
+
+- `DefaultListableBeanFactory` caches each bean it creates in a `singletonObjects` map. `getBean` returns the cached
+  bean if present; otherwise it creates the bean and caches it. This is Spring's default singleton scope: one shared
+  instance per bean name.
+- Minor: both maps are `final`, and `getBean` declares `throws BeansException`, matching Spring's signatures.
+
+Differences from real Spring:
+
+- Spring keeps the cache in `DefaultSingletonBeanRegistry`, a parent class of the factory. Before 2.0 it lived in
+  `AbstractBeanFactory`; Spring 2.0 RC2 moved it out into its own class, as the
+  [2.0.x changelog](https://docs.spring.io/spring-framework/docs/2.0.x/changelog.txt) records:
+
+  > Changes in version 2.0 RC2 (6.7.2006)
+  >
+  > * factored out SingletonBeanRegistry interface from ConfigurableBeanFactory interface
+  > * factored out DefaultSingletonBeanRegistry base class from AbstractBeanFactory
+
+- Checking the cache and creating the bean are not atomic, so two threads may create the same bean. Spring creates
+  singletons inside a lock (`DefaultSingletonBeanRegistry.getSingleton(beanName, ObjectFactory)`).
+- Every bean here is a singleton. Spring also supports `@Scope("prototype")`, which skips the cache and creates a new
+  object on every `getBean`.
