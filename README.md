@@ -1,6 +1,10 @@
 # learn-spring
 
-Notes from spring learning, by building a mini version of spring step by step.
+[![CI](https://github.com/yanxyw/learn-spring/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yanxyw/learn-spring/actions/workflows/ci.yml)
+![Java](https://img.shields.io/badge/Java-17-blue)
+
+Notes from learning Spring by building a mini version of it step by step. Each step is explained in
+[changelog](CHANGELOG.md).
 
 ## References
 
