@@ -33,8 +33,7 @@
   only on `getBean`, so the implementation can grow (parent classes, `ApplicationContext`) without affecting them.
 - `getBean` calls `createBean`, which instantiates the class via reflection (`getDeclaredConstructor().newInstance()`).
   Exceptions from the reflection are wrapped in an unchecked `BeansException`, so callers of `getBean` are not forced to
-  catch them. As
-  [Spring's
+  catch them. As [Spring's
   `BeansException` javadoc](https://github.com/spring-projects/spring-framework/blob/6.0.x/spring-beans/src/main/java/org/springframework/beans/BeansException.java#L26-L27)
   puts it: "Beans exceptions are usually fatal; there is no reason for them to be checked."
 
@@ -101,3 +100,49 @@
 - Aside from `getBean(name)` implemented in `AbstractBeanFactory`, Spring also has a by-type `getBean(Class)`
   implemented in `DefaultListableBeanFactory`. Definitions are stored by name, so finding a bean by type means checking
   every definition, which only a factory that can list all its definitions can do.
+
+### Step 5 - Property values
+
+#### Changes:
+
+- Add `PropertyValues` to `BeanDefinition`, so a definition describes both the class to create and the values to set on
+  its properties. `createBean` now creates the instance (`createBeanInstance`), then sets the values
+  (`applyPropertyValues`).
+
+#### Notes:
+
+- Difference between `BeanDefinition.getPropertyValues()` and `PropertyValues.getPropertyValues()`:
+    - `BeanDefinition.getPropertyValues()`: returns the bean's property values container. It is the same mutable object
+      every time, and the factory reads it at **creation time**. Proved by
+      `testBeanGetsPropertyValuesFromDefinitionAtCreationTime`.
+    - `PropertyValues.getPropertyValues()`: returns the container's `PropertyValue`s as an array. It is a snapshot (a
+      new copy on every call), so modifying it does not alter the container. Proved by
+      `testChangingPropertyValueArrayDoesNotChangeBeanDefinition`.
+- Why use `PropertyDescriptor` in `applyPropertyValues`, using `testPropertyValuesAreApplied` as an example:
+    - Spring's code doesn't know user classes like `Person`, so at compile time it can't directly use `setName` and
+      `setAge`. `applyPropertyValues` uses reflection (through JavaBeans introspection) to find and call the setter
+      dynamically.
+    - `PropertyDescriptor` gives dynamic access to a property's getter and setter: `getWriteMethod()` returns the setter
+      as a `Method`, and `invoke(bean, value)` calls it. In `Person person = (Person) beanFactory.getBean("person");`,
+      the bean is requested for the first time, so `getBean` gets a cache miss and goes to `createBean`, then
+      `applyPropertyValues`. As shown in the debugger screenshot, the `pd` for `age` has a `writeMethodRef` pointing to
+      `public void org.learn.spring.Person.setAge(int)`:
+      ![PropertyDescriptor for age in the debugger](assets/step-5-property-descriptor.png)
+
+#### Next step:
+
+If a property's value is another bean (for example, a `Person` with a `Pet`), there's no suitable way to pass in the
+value:
+
+- If using the bean's name (`add("pet", "pet")`): `applyPropertyValues` passes each value to the setter as it is. It has
+  no way to know that the String `"pet"` refers to a bean, so the call to `setPet(Pet)` fails with a type mismatch.
+  Shown by `testBeanNameAsPropertyValueIsTreatedAsLiteralString`.
+- If using the bean itself (`add("pet", beanFactory.getBean("pet"))`): this injects the right singleton, but each
+  dependency must be created before the bean that needs it. For a circular dependency (`person` ↔ `pet`) no such order
+  exists: whichever bean is created first misses its reference, so one direction always stays `null`. Shown by
+  `testGetBeanAsPropertyValueCannotWireCircularDependency`.
+
+Spring uses `RuntimeBeanReference` to state clearly that a value refers to another bean, not a String. The reference is
+resolved when the bean is created, so the other bean only needs to be registered by then, not created in advance. The
+next step adds `BeanReference`, a simplified version of `RuntimeBeanReference`. It makes a circular dependency
+expressible, but resolving one still needs the bean to be cached before its properties are set (step 7).
