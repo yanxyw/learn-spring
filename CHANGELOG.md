@@ -146,3 +146,33 @@ Spring uses `RuntimeBeanReference` to state clearly that a value refers to anoth
 resolved when the bean is created, so the other bean only needs to be registered by then, not created in advance. The
 next step adds `BeanReference`, a simplified version of `RuntimeBeanReference`. It makes a circular dependency
 expressible, but resolving one still needs the bean to be cached before its properties are set (step 7).
+
+### Step 6 - Add BeanReference
+
+#### Changes:
+
+- Add `BeanReference(beanName)`, a property value that refers to another bean by name. When `applyPropertyValues` meets
+  one, it calls `getBean(beanName)` and passes the result to the setter.
+- The reference is resolved when the bean is created, so `pet` only needs to be registered by the time `person` is
+  created, and the injected bean is the singleton from the cache. Shown by
+  `testBeanReferenceAsPropertyValueIsResolvedToContainerBean`.
+
+#### Next step:
+
+A circular dependency (`person` ↔ `pet`) can now be expressed, but `getBean` overflows the stack:
+
+```
+getBean("person")                      cache miss
+  createBean("person")                 person#1 created, not cached yet
+    applyPropertyValues: pet         → getBean("pet")
+      createBean("pet")                pet#1 created, not cached yet
+        applyPropertyValues: owner   → getBean("person")
+          cache miss                   person#1 exists, but is not in the cache
+          createBean("person")         person#2 → getBean("pet") → pet#2 → ...
+```
+
+`AbstractBeanFactory.getBean` caches a bean only after `createBean` returns, and in a cycle it never returns, so the
+cache never stops the loop, as shown by `testBeanReferenceAsPropertyValueCycleOverflowsStack`. The next step caches the
+bean right after it is instantiated, before its properties are set, which is how Spring solved it first:
+the [1.0 M2 changelog](https://docs.spring.io/spring-framework/docs/1.2.x/changelog.txt)
+says "reworked AbstractBeanFactory's circular reference detection into eager singleton caching".

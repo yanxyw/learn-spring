@@ -126,6 +126,32 @@ public class BeanFactoryTest {
             assertNull(pet.getOwner());       // the other never can be
         }
 
+        @Test
+        void testBeanReferenceAsPropertyValueIsResolvedToContainerBean() {
+            beanFactory.registerBeanDefinition("pet", new BeanDefinition(Pet.class));
+
+            BeanDefinition personDefinition = new BeanDefinition(Person.class);
+            personDefinition.getPropertyValues().add("pet", new BeanReference("pet"));
+            beanFactory.registerBeanDefinition("person", personDefinition);
+
+            Person person = (Person) beanFactory.getBean("person");
+            assertSame(beanFactory.getBean("pet"), person.getPet());
+        }
+
+        // Known gap: a bean is cached only after its properties are set. Step 7 fixes it.
+        @Test
+        void testBeanReferenceAsPropertyValueCycleOverflowsStack() {
+            BeanDefinition personDefinition = new BeanDefinition(Person.class);
+            personDefinition.getPropertyValues().add("pet", new BeanReference("pet"));
+            beanFactory.registerBeanDefinition("person", personDefinition);
+
+            BeanDefinition petDefinition = new BeanDefinition(Pet.class);
+            petDefinition.getPropertyValues().add("owner", new BeanReference("person"));
+            beanFactory.registerBeanDefinition("pet", petDefinition);
+
+            assertThrows(StackOverflowError.class, () -> beanFactory.getBean("person"));
+        }
+
     }
 
 }

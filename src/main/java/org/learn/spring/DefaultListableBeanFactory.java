@@ -40,6 +40,9 @@ public class DefaultListableBeanFactory extends AbstractBeanFactory {
         for (PropertyValue pv : pvs.getPropertyValues()) {
             String propertyName = pv.getName();
             Object value = pv.getValue();
+            if (value instanceof BeanReference beanReference) {
+                value = getBean(beanReference.getBeanName());
+            }
             try {
                 PropertyDescriptor pd = new PropertyDescriptor(propertyName, bean.getClass());
                 pd.getWriteMethod().invoke(bean, value);
