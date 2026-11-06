@@ -14,7 +14,6 @@ public abstract class AbstractBeanFactory implements BeanFactory {
             return bean;
         }
         bean = createBean(beanName, getBeanDefinition(beanName));
-        addSingleton(beanName, bean);
         return bean;
     }
 
@@ -24,6 +23,10 @@ public abstract class AbstractBeanFactory implements BeanFactory {
 
     protected void addSingleton(String beanName, Object singletonObject) {
         singletonObjects.put(beanName, singletonObject);
+    }
+
+    protected void removeSingleton(String beanName) {
+        singletonObjects.remove(beanName);
     }
 
     protected abstract BeanDefinition getBeanDefinition(String beanName) throws BeansException;

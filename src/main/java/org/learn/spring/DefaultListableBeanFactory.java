@@ -24,7 +24,13 @@ public class DefaultListableBeanFactory extends AbstractBeanFactory {
     @Override
     protected Object createBean(String beanName, BeanDefinition beanDefinition) throws BeansException {
         Object beanInstance = createBeanInstance(beanName, beanDefinition);
-        applyPropertyValues(beanName, beanInstance, beanDefinition.getPropertyValues());
+        addSingleton(beanName, beanInstance);
+        try {
+            applyPropertyValues(beanName, beanInstance, beanDefinition.getPropertyValues());
+        } catch (BeansException e) {
+            removeSingleton(beanName);
+            throw e;
+        }
         return beanInstance;
     }
 

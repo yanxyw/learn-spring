@@ -176,3 +176,23 @@ cache never stops the loop, as shown by `testBeanReferenceAsPropertyValueCycleOv
 bean right after it is instantiated, before its properties are set, which is how Spring solved it first:
 the [1.0 M2 changelog](https://docs.spring.io/spring-framework/docs/1.2.x/changelog.txt)
 says "reworked AbstractBeanFactory's circular reference detection into eager singleton caching".
+
+### Step 7 - Eager singleton caching
+
+#### Changes:
+
+- `createBean` caches the bean right after instantiation, before `applyPropertyValues`, so a circular reference finds it
+  in the cache (`removeSingleton` drops it again if setting properties fails).
+
+The step 6 cycle now ends at the second `getBean("person")`:
+
+```
+getBean("person")                      cache miss
+  createBean("person")                 person#1 created, cached
+    applyPropertyValues: pet         → getBean("pet")
+      createBean("pet")                pet#1 created, cached
+        applyPropertyValues: owner   → getBean("person")
+          cache hit                    person#1 (properties not set yet)
+        pet#1.owner = person#1
+    person#1.pet = pet#1
+```
